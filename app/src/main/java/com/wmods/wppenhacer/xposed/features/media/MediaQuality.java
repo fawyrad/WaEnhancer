@@ -108,7 +108,7 @@ public class MediaQuality extends Feature {
                     }
                     if (prefs.getBoolean("video_maxfps", false)) {
                         var frameRateField = mediaTranscodeParams.get("frameRate");
-                        frameRateField.setInt(resizeVideo, 60);
+                        frameRateField.setInt(resizeVideo, 120);
                     }
                 }
             });
