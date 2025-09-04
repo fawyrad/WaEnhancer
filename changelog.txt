@@ -1,5 +1,5 @@
 [WA AND WA BUSINESS]
-* Add 2.25.22.xx, 2.25.23.xx, 2.25.24.xx to supported versions
+* Add 2.25.22.xx, 2.25.23.xx, 2.25.25.xx to supported versions
 
 [WAE]
 * Updated translations (Thanks to all translators)
