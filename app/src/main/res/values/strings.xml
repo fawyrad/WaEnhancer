@@ -252,8 +252,8 @@
     <string name="call_blocking_type">Call blocking type</string>
     <string name="call_blocking_type_sum">Select the method by which the call blocking will be done.</string>
     <string name="call_type_buttons_no_internet">No internet (\"Calling\")</string>
-    <string name="call_type_buttons_declined">Call declined</string>
     <string name="call_type_buttons_uncallable">Unable to receive WhatsApp calls</string>
+    <string name="call_type_buttons_busy">Busy (On another call)</string>
     <string name="call_type_buttons_ended">Not answered</string>
     <string name="enable_tasker_automation">Enable Tasker Automation</string>
     <string name="enable_tasker_automation_sum">Enables the possibility of using intent to receive and send messages in Tasker</string>
@@ -444,6 +444,8 @@
     <string name="block_unverified">Block Unverified</string>
     <string name="disable_whatsapp_expiration">Disable WhatsApp Expiration</string>
     <string name="disable_whatsapp_expiration_sum">Deactivates the expired version of WhatsApp, (Note: Manual Disable to update WhatsApp on the Play Store or mark the Play Store on LSposed)</string>
+    <string name="disable_ads">Disable Ads</string>
+    <string name="disable_ads_sum">Blocks ads from appearing in WhatsApp</string>
     <string name="lockedchats_enhancer">Enhanced Locked Chats</string>
     <string name="lockedchats_enhancer_sum">Improve locked chats by hiding notifications and contacts from the contact list</string>
     <string name="call_recording_title">Call Recording</string>
@@ -479,4 +481,11 @@
     <string name="contact_probably_not_added">Contact probably didn\'t add you!</string>
     <string name="jump_first_message">Jump to First Message</string>
     <string name="jump_first_message_sum">Add a button to skip the first message in the conversations screen</string>
+    <string name="picker_loading_contacts">Loading contacts…</string>
+    <string name="mode_all">All</string>
+    <string name="picker_contacts">Contacts</string>
+    <string name="groups">Groups</string>
+    <string name="picker_no_results">No contacts found</string>
+    <string name="picker_group">Group</string>
+    <string name="picker_contact">Contact</string>
 </resources>

@@ -6,6 +6,7 @@ import android.os.Message;
 import android.os.PowerManager;
 import android.text.TextUtils;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -19,6 +20,7 @@ import com.wmods.wppenhacer.xposed.core.Feature;
 import com.wmods.wppenhacer.xposed.core.FeatureLoader;
 import com.wmods.wppenhacer.xposed.core.WppCore;
 import com.wmods.wppenhacer.xposed.core.components.FMessageWpp;
+import com.wmods.wppenhacer.xposed.core.components.SharedPreferencesWrapper;
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator;
 import com.wmods.wppenhacer.xposed.features.listeners.ConversationItemListener;
 import com.wmods.wppenhacer.xposed.utils.AnimationUtil;
@@ -81,6 +83,7 @@ public class Others extends Feature {
         var animationEmojis = prefs.getBoolean("animation_emojis", false);
         var disableProfileStatus = prefs.getBoolean("disable_profile_status", false);
         var disableExpiration = prefs.getBoolean("disable_expiration", false);
+        var disableAd = prefs.getBoolean("disable_ads", false);
 
         propsInteger.put(3877, oldStatus ? igstatus ? 2 : 0 : 2);
 
@@ -89,8 +92,22 @@ public class Others extends Feature {
 
         propsBoolean.put(4497, menuWIcons);
         propsBoolean.put(4023, false);
-        propsBoolean.put(14862, newSettings);
-        propsInteger.put(18564, newSettings ? 1 : 0);
+        propsBoolean.put(16250, false);
+
+        if (newSettings) {
+            XposedBridge.hookAllMethods(WppCore.INSTANCE.getHomeActivityClass(), "onCreateOptionsMenu", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                    var menu = (Menu)param.args[0];
+                    var menuItem = menu.findItem(Utils.getID("me_tab_menu_item","id"));
+                    if (menuItem != null){
+                        menuItem.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                    }
+                }
+            });
+        }
+        propsBoolean.put(14862, newSettings); // WHATS_HAPPENING_SENDING_ENABLED_CODE
+        propsInteger.put(18564, newSettings ? 2 : 0); // ME_TAB_V2_VARIANTS_CODE
 
         propsBoolean.put(2889, floatingMenu);
 
@@ -250,6 +267,10 @@ public class Others extends Feature {
             FeatureLoader.disableExpirationVersion(classLoader);
         }
 
+        if (disableAd) {
+            disableAds();
+        }
+
         if (!filterSeen) {
             disableHomeFilters();
         }
@@ -280,6 +301,27 @@ public class Others extends Feature {
         });
     }
 
+    private void disableAds() throws Exception {
+        propsBoolean.put(22904, true);
+        propsBoolean.put(14306, false);
+        try {
+            var loadAd = Unobfuscator.loadAdVerifyMethod(classLoader);
+            XposedBridge.hookMethod(loadAd, new XC_MethodHook() {
+                @Override
+                @SuppressWarnings("unchecked")
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    var enumParam = (Enum) param.args[0];
+                    if (enumParam.name().equals("WAMO")) {
+                        var retClass = (Class<? extends Enum>) ((Method) param.method).getReturnType();
+                        var pauseEnum = Enum.valueOf(retClass, "PAUSED");
+                        param.setResult(pauseEnum);
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            logDebug(e);
+        }
+    }
 
     private void disablePhotoProfileStatus() throws Exception {
         var refreshStatusClass = Unobfuscator.loadRefreshStatusClass(classLoader);
@@ -606,7 +648,7 @@ public class Others extends Feature {
     private void hookProps() throws Exception {
         var methodPropsBoolean = Unobfuscator.loadPropsBooleanMethod(classLoader);
         logDebug(Unobfuscator.getMethodDescriptor(methodPropsBoolean));
-        var dataUsageActivityClass = WppCore.getDataUsageActivityClass(classLoader);
+        var dataUsageActivityClass = WppCore.INSTANCE.getDataUsageActivityClass();
         XposedBridge.hookMethod(methodPropsBoolean, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -672,40 +714,35 @@ public class Others extends Feature {
         }
 
 
-        try {
-            Method addSeachBar = Unobfuscator.loadAddOptionSearchBarMethod(classLoader);
-            XposedBridge.hookMethod(addSeachBar, new XC_MethodHook() {
-                private Object homeActivity;
-                private Field pageIdField;
-                private int originPageId;
+        Method addSeachBar = Unobfuscator.loadAddOptionSearchBarMethod(classLoader);
+        Field curPageField = Unobfuscator.loadGetCurrentPageInHomeField(classLoader);
 
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                    if (!Objects.equals(filterChats, "1"))
-                        return;
-                    homeActivity = param.thisObject;
-                    if (Modifier.isStatic(param.method.getModifiers())) {
-                        homeActivity = param.args[0];
-                    }
-                    pageIdField = XposedHelpers.findField(homeActivity.getClass(), "A01");
-                    originPageId = 0;
-                    if (pageIdField.getType() == int.class) {
-                        originPageId = pageIdField.getInt(homeActivity);
-                        pageIdField.setInt(homeActivity, 1);
-                    }
+        XposedBridge.hookMethod(addSeachBar, new XC_MethodHook() {
+            private Object homeActivity;
+            private int originPageId;
+
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                if (!Objects.equals(filterChats, "1")) return;
+                homeActivity = param.thisObject;
+                if (Modifier.isStatic(param.method.getModifiers())) {
+                    homeActivity = param.args[0];
                 }
-
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                    if (originPageId != 0) {
-                        pageIdField.setInt(homeActivity, originPageId);
-                    }
+                originPageId = 0;
+                if (curPageField.getType() == int.class) {
+                    originPageId = curPageField.getInt(homeActivity);
+                    curPageField.setInt(homeActivity, 1);
                 }
-            });
-        } catch (Throwable ignored) {
-        }
+            }
 
-        XposedHelpers.findAndHookMethod(WppCore.getHomeActivityClass(classLoader), "onPrepareOptionsMenu", Menu.class, new XC_MethodHook() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (originPageId != 0) {
+                    curPageField.setInt(homeActivity, originPageId);
+                }
+            }
+        });
+        XposedHelpers.findAndHookMethod(WppCore.INSTANCE.getHomeActivityClass(), "onPrepareOptionsMenu", Menu.class, new XC_MethodHook() {
             @Override
             protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                 var menu = (Menu) param.args[0];

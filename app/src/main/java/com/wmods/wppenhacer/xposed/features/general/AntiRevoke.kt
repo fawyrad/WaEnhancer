@@ -9,13 +9,13 @@ import com.wmods.wppenhacer.xposed.core.Feature
 import com.wmods.wppenhacer.xposed.core.WppCore
 import com.wmods.wppenhacer.xposed.core.components.FMessageWpp
 import com.wmods.wppenhacer.xposed.core.components.FStatusWpp
+import com.wmods.wppenhacer.xposed.core.components.StatusItemWpp
 import com.wmods.wppenhacer.xposed.core.components.WaContactWpp
 import com.wmods.wppenhacer.xposed.core.db.DelMessageStore
 import com.wmods.wppenhacer.xposed.core.db.MessageStore
 import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
 import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache
 import com.wmods.wppenhacer.xposed.features.listeners.ConversationItemListener
-import com.wmods.wppenhacer.xposed.features.listeners.MenuStatusListener
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import de.robv.android.xposed.XC_MethodHook
@@ -46,7 +46,8 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
             val safeArgs = param.args?.filterNotNull() ?: return null
             safeArgs.firstOrNull { FMessageWpp.TYPE.isInstance(it) }?.let { return FMessageWpp(it) }
             val arg0 = param.args?.getOrNull(0) ?: return null
-            return MenuStatusListener.getFMessageFromStatusData(arg0)
+            val statusItem = StatusItemWpp.from(arg0) ?: return null
+            return statusItem.fMessage
         }
 
 
@@ -129,11 +130,11 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
             ConversationItemListener.OnConversationItemListener() {
             override fun onItemBind(
                 fMessage: FMessageWpp,
-                viewGroup: ViewGroup,
+                view: ViewGroup,
                 position: Int,
                 convertView: View?
             ) {
-                val dateTextView = viewGroup.findViewById<TextView>(Utils.getID("date", "id"))
+                val dateTextView = view.findViewById<TextView>(Utils.getID("date", "id"))
                 bindRevokedMessageUI(fMessage, dateTextView, "antirevoke")
             }
         })
@@ -177,6 +178,8 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
         antirevokeType: String
     ) {
         if (dateTextView == null) return
+        val antirevokeValue = prefs.getString(antirevokeType, "0")?.toIntOrNull() ?: 0
+        if (antirevokeValue == 0) return
 
         val key = fMessage.key
         val messageRevokedList = getRevokedMessagesForJid(fMessage)
@@ -204,8 +207,6 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
                     Utils.showToast(toastMessage, Toast.LENGTH_LONG)
                 }
             }
-
-            val antirevokeValue = prefs.getString(antirevokeType, "0")?.toIntOrNull() ?: 0
 
             when (antirevokeValue) {
                 1 -> {

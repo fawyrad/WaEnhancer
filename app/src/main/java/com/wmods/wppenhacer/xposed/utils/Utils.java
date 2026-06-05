@@ -58,6 +58,7 @@ public class Utils {
     private static final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     public static XSharedPreferences xprefs;
     private static final HashMap<String, Integer> ids = new HashMap<>();
+    public static ClassLoader appClassLoader;
 
     public static void init(ClassLoader loader) {
         var context = Utils.getApplication();
@@ -133,6 +134,12 @@ public class Utils {
         }
     }
 
+    public static int dipToPixels(int dipValue) {
+        DisplayMetrics metrics = FeatureLoader.mApp.getResources().getDisplayMetrics();
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dipValue, metrics);
+    }
+
+
     public static int dipToPixels(float dipValue) {
         DisplayMetrics metrics = FeatureLoader.mApp.getResources().getDisplayMetrics();
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dipValue, metrics);
@@ -186,10 +193,18 @@ public class Utils {
         return null;
     }
 
-
     public static String copyFile(File srcFile, String destFolder, String name) {
         if (srcFile == null || !srcFile.exists()) return "File not found or is null";
+        try {
+        return copyFile(new FileInputStream(srcFile),destFolder, name);
+        } catch (Exception e) {
+            XposedBridge.log(e);
+            return e.getMessage();
+        }
+    }
 
+
+    public static String copyFile(InputStream inputStream, String destFolder, String name) {
         if (xprefs.getBoolean("lite_mode", false)) {
             try {
                 var folder = WppCore.getPrivString("download_folder", null);
@@ -204,7 +219,7 @@ public class Utils {
 
                 ContentResolver contentResolver = Utils.getApplication().getContentResolver();
 
-                try (InputStream in = new FileInputStream(srcFile);
+                try (InputStream in = inputStream;
                      OutputStream out = contentResolver.openOutputStream(newFile.getUri())) {
 
                     if (out == null) return "Failed to open output stream";
@@ -223,7 +238,7 @@ public class Utils {
             }
         } else {
             File destFile = new File(destFolder, name);
-            try (FileInputStream in = new FileInputStream(srcFile);
+            try (InputStream in = inputStream;
                  var parcelFileDescriptor = WppCore.getClientBridge().openFile(destFile.getAbsolutePath(), true)) {
                 var out = new FileOutputStream(parcelFileDescriptor.getFileDescriptor());
                 byte[] bArr = new byte[1024];

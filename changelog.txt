@@ -1,6 +1,8 @@
 [ADDED]
-* Added support to WA 2.26.18.xx
+* Added support for placing text on the clock in any position using [TIME] (WAE -> General -> General -> Text next to Timestamp)
+Ex: 🕧 [TIME]
 
 [FIXED]
-* Fixed error in the Download status notification
+* Fixed compatibility with WA 2.26.21.75
 
+NOTE: Now let's wait for WAEX to copy the commits 😆
