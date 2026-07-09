@@ -19,7 +19,7 @@ import com.wmods.wppenhacer.xposed.features.listeners.ConversationItemListener
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XSharedPreferences
+import android.content.SharedPreferences 
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import java.text.DateFormat
@@ -28,7 +28,7 @@ import java.util.Date
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
-class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
+class AntiRevoke(loader: ClassLoader, preferences:SharedPreferences) :
     Feature(loader, preferences) {
 
     companion object {
@@ -38,7 +38,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
             DateFormat.getDateTimeInstance(
                 DateFormat.SHORT,
                 DateFormat.SHORT,
-                Utils.getApplication().resources.configuration.locales[0]
+                Utils.application.resources.configuration.locales[0]
             )
         }
 
@@ -56,8 +56,8 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
                 fMessage.key.remoteJid.phoneNumber ?: return Collections.synchronizedSet(HashSet())
             return messageRevokedMap.getOrPut(stripJID) {
                 val messages =
-                    DelMessageStore.getInstance(Utils.getApplication()).getMessagesByJid(stripJID)
-                Collections.synchronizedSet(messages ?: HashSet())
+                    DelMessageStore.getInstance(Utils.application).getMessagesByJid(stripJID)
+                Collections.synchronizedSet(messages)
             }
         }
 
@@ -65,7 +65,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
             val stripJID = fMessage.key.remoteJid.phoneNumber!!
             val messages = getRevokedMessagesForJid(fMessage)
             messages.add(messageID)
-            DelMessageStore.getInstance(Utils.getApplication()).insertMessage(
+            DelMessageStore.getInstance(Utils.application).insertMessage(
                 stripJID,
                 messageID,
                 System.currentTimeMillis()
@@ -83,10 +83,8 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
 
             override fun beforeHookedMethod(param: MethodHookParam) {
                 val fStatusKey = FStatusWpp.FStatusKey(param.args[1])
-                val fstatus = fStatusKey.fStatus
-                if (fstatus == null) return
-                val fMessage = fstatus.fMessage
-                if (fMessage == null) return
+                val fstatus = fStatusKey.fStatus ?: return
+                val fMessage = fstatus.fMessage ?: return
                 if (!fStatusKey.isFromMe && handleRevocationAttempt(
                         fMessage,
                         fStatusKey.messageID
@@ -135,7 +133,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
                 convertView: View?
             ) {
                 val dateTextView = view.findViewById<TextView>(Utils.getID("date", "id"))
-                bindRevokedMessageUI(fMessage, dateTextView, "antirevoke")
+                bindRevokedMessageUI(fMessage, dateTextView, "antirevoke", view)
             }
         })
 
@@ -175,16 +173,22 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
     private fun bindRevokedMessageUI(
         fMessage: FMessageWpp,
         dateTextView: TextView?,
-        antirevokeType: String
+        antirevokeType: String,
+        boundView: View? = null
     ) {
         if (dateTextView == null) return
         val antirevokeValue = prefs.getString(antirevokeType, "0")?.toIntOrNull() ?: 0
         if (antirevokeValue == 0) return
 
         val key = fMessage.key
+        val boundMessageId = key.messageID
         val messageRevokedList = getRevokedMessagesForJid(fMessage)
         val originalMessage =
             XposedHelpers.getAdditionalInstanceField(dateTextView, "originalMessage") as? String
+
+        dateTextView.paint.isUnderlineText = false
+        dateTextView.setOnClickListener(null)
+        dateTextView.setCompoundDrawables(null, null, null, null)
 
         val messageID = if (messageRevokedList.contains(key.messageID)) {
             key.messageID
@@ -194,15 +198,16 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
         }
 
         if (messageID != null) {
-            val appInstance = Utils.getApplication()
+            val appInstance = Utils.application
             val timestamp =
                 DelMessageStore.getInstance(appInstance).getTimestampByMessageId(messageID)
             if (timestamp > 0) {
                 val date = dateFormatThreadLocal.get()?.format(Date(timestamp))
                 dateTextView.paint.isUnderlineText = true
                 dateTextView.setOnClickListener {
+                    if (boundView != null && !ConversationItemListener.isViewBoundToMessage(boundView, boundMessageId)) return@setOnClickListener
                     val toastMessage =
-                        Utils.getApplication().getString(R.string.message_removed_on)
+                        Utils.application.getString(R.string.message_removed_on)
                             .format(date)
                     Utils.showToast(toastMessage, Toast.LENGTH_LONG)
                 }
@@ -223,7 +228,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
                 }
 
                 2 -> {
-                    val drawable = Utils.getApplication().getDrawable(R.drawable.deleted)
+                    val drawable = Utils.application.getDrawable(R.drawable.deleted)
                     dateTextView.setCompoundDrawablesWithIntrinsicBounds(null, null, drawable, null)
                     dateTextView.compoundDrawablePadding = 5
                 }
@@ -260,15 +265,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
                     val mConversation = WppCore.getCurrentConversation()
                     if (mConversation != null && fMessage.key.remoteJid.phoneNumber == WppCore.getCurrentUserJid()?.phoneNumber) {
                         mConversation.runOnUiThread {
-                            if (mConversation.hasWindowFocus()) {
-                                mConversation.startActivity(mConversation.intent)
-                                @Suppress("DEPRECATION")
-                                mConversation.overridePendingTransition(0, 0)
-                                mConversation.window.decorView.findViewById<View>(android.R.id.content)
-                                    .postInvalidate()
-                            } else {
-                                mConversation.recreate()
-                            }
+                            ConversationItemListener.notifyDataSetChanged()
                         }
                     }
                 } catch (e: Exception) {
@@ -281,10 +278,10 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
 
     private fun formatRevocationMessage(fMessage: FMessageWpp): String? {
         var jidAuthor = fMessage.key.remoteJid
-        var messageSuffix = Utils.getApplication().getString(R.string.deleted_message)
+        var messageSuffix = Utils.application.getString(R.string.deleted_message)
 
         if (jidAuthor.isStatus) {
-            messageSuffix = Utils.getApplication().getString(R.string.deleted_status)
+            messageSuffix = Utils.application.getString(R.string.deleted_status)
             jidAuthor = fMessage.userJid
         }
         val waContact = WaContactWpp.getWaContactFromJid(jidAuthor)
@@ -305,7 +302,7 @@ class AntiRevoke(loader: ClassLoader, preferences: XSharedPreferences) :
             val participantName = participantWaContact?.displayName
                 ?: participantJid.phoneNumber
 
-            Utils.getApplication()
+            Utils.application
                 .getString(R.string.deleted_a_message_in_group, participantName, name)
         } else {
             "$name $messageSuffix"

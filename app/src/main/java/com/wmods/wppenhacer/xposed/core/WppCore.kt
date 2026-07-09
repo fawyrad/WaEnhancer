@@ -23,22 +23,22 @@ import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XSharedPreferences
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.luckypray.dexkit.query.enums.StringMatchType
 import java.io.File
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.util.Collections
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 @SuppressLint("StaticFieldLeak")
+@Suppress("UNUSED")
 object WppCore {
     @JvmStatic
-    val listenerActivity: ConcurrentHashMap.KeySetView<ActivityChangeState?, Boolean?> = ConcurrentHashMap.newKeySet<ActivityChangeState>()
+    val listenerActivity: ConcurrentHashMap.KeySetView<ActivityChangeState, Boolean> = ConcurrentHashMap.newKeySet<ActivityChangeState>()
 
     @JvmField
     internal var mCurrentActivity: Activity? = null
@@ -68,8 +68,8 @@ object WppCore {
 
     @JvmStatic
     @Throws(Exception::class)
-    fun initialize(loader: ClassLoader, pref: XSharedPreferences) {
-        privPrefs = Utils.getApplication().getSharedPreferences("WaGlobal", Context.MODE_PRIVATE)
+    fun initialize(loader: ClassLoader, pref: SharedPreferences) {
+        privPrefs = Utils.application.getSharedPreferences("WaGlobal", Context.MODE_PRIVATE)
 
         // init UserJID
         val companionField = FMessageWpp.UserJid.TYPE_JID.getDeclaredField("Companion")
@@ -146,7 +146,7 @@ object WppCore {
         hookStatusToMessageMapper(loader)
 
         if (!pref.getBoolean("lite_mode", false)) {
-            initBridge(Utils.getApplication())
+            initBridge(Utils.application)
         }
     }
 
@@ -199,9 +199,9 @@ object WppCore {
         val preferredOrder = prefsCacheHooks.getInt("preferredOrder", 1)
 
         val primaryClient =
-            if (preferredOrder == 0) ProviderClientKt(context) else BridgeClientKt(context)
+            if (preferredOrder == 0) ProviderClientKt() else BridgeClientKt(context)
         val fallbackClient =
-            if (preferredOrder == 0) BridgeClientKt(context) else ProviderClientKt(context)
+            if (preferredOrder == 0) BridgeClientKt(context) else ProviderClientKt()
 
         if (tryConnectBridge(primaryClient)) return
 
@@ -216,16 +216,17 @@ object WppCore {
     @JvmStatic
     @Throws(Exception::class)
     private fun tryConnectBridge(baseClient: BaseClient): Boolean {
-        try {
+        return try {
             XposedBridge.log("Trying to connect to ${baseClient.javaClass.simpleName}")
             client = baseClient
-            val canLoadFuture: CompletableFuture<Boolean> = baseClient.connect()
-            val canLoad = canLoadFuture.get()
-            if (!canLoad) throw Exception()
+           runBlocking {
+                val canLoad = baseClient.connect()
+                if (!canLoad) throw Exception()
+                true
+            }
         } catch (_: Exception) {
-            return false
+            false
         }
-        return true
     }
 
     @JvmStatic
@@ -298,7 +299,7 @@ object WppCore {
     @JvmStatic
     fun loadWADatabase() {
         if (mWaDatabase != null) return
-        val dataDir = Utils.getApplication().filesDir.parentFile
+        val dataDir = Utils.application.filesDir.parentFile
         val database = File(dataDir, "databases/wa.db")
         if (database.exists()) {
             mWaDatabase = SQLiteDatabase.openDatabase(
@@ -334,11 +335,6 @@ object WppCore {
         Unobfuscator.findFirstClassUsingName(Utils.appClassLoader, StringMatchType.EndsWith,".SettingsDataUsageActivity")
     }
 
-
-    val textStatusComposerFragmentClass: Class<*> by lazy {
-        Unobfuscator.findFirstClassUsingName(Utils.appClassLoader, StringMatchType.EndsWith,".TextStatusComposerFragment")
-    }
-
     val voipManagerClass: Class<*> by lazy {
         Unobfuscator.findFirstClassUsingName(Utils.appClassLoader, StringMatchType.EndsWith,".Voip")
     }
@@ -360,7 +356,7 @@ object WppCore {
             }
         }
         val startupPrefs =
-            Utils.getApplication().getSharedPreferences("startup_prefs", Context.MODE_PRIVATE)
+            Utils.application.getSharedPreferences("startup_prefs", Context.MODE_PRIVATE)
         return startupPrefs.getInt("night_mode", 0)
     }
 
@@ -475,14 +471,14 @@ object WppCore {
     @JvmStatic
     fun getMyName(): String {
         val startupPrefs =
-            Utils.getApplication().getSharedPreferences("startup_prefs", Context.MODE_PRIVATE)
+            Utils.application.getSharedPreferences("startup_prefs", Context.MODE_PRIVATE)
         return startupPrefs.getString("push_name", "WhatsApp") ?: "WhatsApp"
     }
 
     @JvmStatic
     fun getMainPrefs(): SharedPreferences {
-        return Utils.getApplication().getSharedPreferences(
-            "${Utils.getApplication().packageName}_preferences_light", Context.MODE_PRIVATE
+        return Utils.application.getSharedPreferences(
+            "${Utils.application.packageName}_preferences_light", Context.MODE_PRIVATE
         )
     }
 
@@ -498,7 +494,7 @@ object WppCore {
 
     @JvmStatic
     fun getMyPhoto(): Drawable? {
-        val datafolder = Utils.getApplication().cacheDir.parentFile
+        val datafolder = Utils.application.cacheDir.parentFile
         val file = File(datafolder, "files/me.jpg")
         if (file.exists()) return Drawable.createFromPath(file.absolutePath)
         return null
@@ -574,7 +570,7 @@ object WppCore {
     }
 
     @JvmStatic
-    fun getPrivJSON(key: String, defaultValue: JSONObject?): JSONObject? {
+    fun getPrivJSON(key: String, defaultValue: JSONObject): JSONObject {
         val jsonStr = privPrefs.getString(key, null) ?: return defaultValue
         return try {
             JSONObject(jsonStr)
@@ -584,8 +580,8 @@ object WppCore {
     }
 
     @JvmStatic
-    fun setPrivJSON(key: String, value: JSONObject?) {
-        privPrefs.edit(commit = true) { putString(key, value?.toString()) }
+    fun setPrivJSON(key: String, value: JSONObject) {
+        privPrefs.edit(commit = true) { putString(key, value.toString()) }
     }
 
     @SuppressLint("ApplySharedPref")
@@ -651,9 +647,9 @@ object WppCore {
 
     @JvmStatic
     fun getRootWhatsAppDir(): File {
-        val mediaDirs = Utils.getApplication().externalMediaDirs
+        val mediaDirs = Utils.application.externalMediaDirs
         val appName =
-            Utils.getApplication().packageManager.getApplicationLabel(Utils.getApplication().applicationInfo)
+            Utils.application.packageManager.getApplicationLabel(Utils.application.applicationInfo)
         if (mediaDirs.isNotEmpty()) {
             val rootDir = File(mediaDirs[0], appName.toString())
             if (rootDir.exists()) return rootDir
@@ -692,11 +688,11 @@ object WppCore {
         return mWaDatabase
     }
 
-    interface ActivityChangeState {
+    fun interface ActivityChangeState {
         fun onChange(activity: Activity, type: ChangeType)
 
         enum class ChangeType {
-            CREATED, STARTED, ENDED, RESUMED, PAUSED
+            CREATED, STARTED, ENDED, RESUMED, PAUSED,DESTROYED;
         }
     }
 }

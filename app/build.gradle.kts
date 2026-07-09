@@ -1,9 +1,9 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import java.io.FileInputStream
 import java.util.Locale
-import java.util.Properties
+import kotlin.time.Duration.Companion.milliseconds
 
 plugins {
     alias(libs.plugins.androidApplication)
@@ -14,10 +14,10 @@ plugins {
 
 fun getGitHashCommit(): String {
     return try {
-        val processBuilder = ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+        val processBuilder = ProcessBuilder("git", "rev-parse", "HEAD")
         val process = processBuilder.start()
-        process.inputStream.bufferedReader().readText().trim()
-    } catch (e: Exception) {
+        process.inputStream.bufferedReader().readText().trim().substring(0,8)
+    } catch (_: Exception) {
         "unknown"
     }
 }
@@ -26,8 +26,9 @@ val gitHash: String = getGitHashCommit().uppercase(Locale.getDefault())
 
 android {
     namespace = "com.wmods.wppenhacer"
+    //noinspection GradleDependency
     compileSdk = 36
-    ndkVersion = "27.0.11902837 rc2"
+    ndkVersion = "28.2.13676358"
 
     flavorDimensions += "version"
 
@@ -35,6 +36,7 @@ android {
         create("whatsapp") {
             dimension = "version"
             applicationIdSuffix = ""
+            isDefault = true
         }
         create("business") {
             dimension = "version"
@@ -46,39 +48,27 @@ android {
     defaultConfig {
         applicationId = "com.wmods.wppenhacer"
         minSdk = 28
+        //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 154
-        versionName = "1.5.4-DEV ($gitHash)"
+        versionName = "1.5.5 ($gitHash)"
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         signingConfigs.create("config") {
-            val keystorePropertiesFile = rootProject.file("local.properties")
-            val keystoreProperties = Properties()
-            if (keystorePropertiesFile.exists()) {
-                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-            }
-
             val androidStoreFile = project.findProperty("androidStoreFile") as String?
-                ?: keystoreProperties.getProperty("androidStoreFile")
-
             if (!androidStoreFile.isNullOrEmpty()) {
                 storeFile = rootProject.file(androidStoreFile)
-                storePassword = project.findProperty("androidStorePassword") as String?
-                    ?: keystoreProperties.getProperty("androidStorePassword")
-                keyAlias = project.findProperty("androidKeyAlias") as String?
-                    ?: keystoreProperties.getProperty("androidKeyAlias")
-                keyPassword = project.findProperty("androidKeyPassword") as String?
-                    ?: keystoreProperties.getProperty("androidKeyPassword")
+                storePassword = project.property("androidStorePassword") as String
+                keyAlias = project.property("androidKeyAlias") as String
+                keyPassword = project.property("androidKeyPassword") as String
             }
         }
 
         ndk {
             abiFilters.add("armeabi-v7a")
             abiFilters.add("arm64-v8a")
-            abiFilters.add("x86_64")
-            abiFilters.add("x86")
         }
 
     }
@@ -92,24 +82,39 @@ android {
             excludes += "**.properties"
             excludes += "**.bin"
         }
+
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
-        all {
+
+        debug {
+            isMinifyEnabled = project.hasProperty("minify") && project.properties["minify"].toString().toBoolean()
+            //noinspection NotShrinkingResources
+            isShrinkResources = false
             signingConfig =
                 if (signingConfigs["config"].storeFile != null) signingConfigs["config"] else signingConfigs["debug"]
-            if (project.hasProperty("minify") && project.properties["minify"].toString()
-                    .toBoolean()
-            ) {
-                isMinifyEnabled = true
-                proguardFiles(
-                    getDefaultProguardFile("proguard-android-optimize.txt"),
-                    "proguard-rules.pro"
-                )
-            }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
+
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            //noinspection NotShrinkingResources
+            isShrinkResources = false
+            signingConfig =
+                if (signingConfigs["config"].storeFile != null) signingConfigs["config"] else signingConfigs["debug"]
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -130,6 +135,18 @@ android {
 
     lint {
         disable += "SelectedPhotoAccess"
+        baseline = file("lint-baseline.xml")
+    }
+
+    applicationVariants.all {
+        val appName = when (flavorName) {
+            "business" -> "WaEnhancer-Business"
+            else -> "WaEnhancer"
+        }
+
+        outputs.all {
+            (this as BaseVariantOutputImpl).outputFileName = "$appName-$versionName.apk"
+        }
     }
 
     materialThemeBuilder {
@@ -192,6 +209,7 @@ dependencies {
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
     implementation(libs.markwon.core)
+    implementation(libs.remote.preferences)
 }
 
 
@@ -199,6 +217,12 @@ configurations.all {
     exclude("androidx.appcompat", "appcompat")
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk7")
     exclude("org.jetbrains.kotlin", "kotlin-stdlib-jdk8")
+}
+
+tasks.configureEach {
+    if (name.endsWith("ReleaseArtProfile")) {
+        enabled = false
+    }
 }
 
 interface InjectedExecOps {
@@ -212,6 +236,7 @@ afterEvaluate {
             runCatching {
                 val injected  = project.objects.newInstance<InjectedExecOps>()
                 runBlocking {
+                    delay(500.milliseconds)
                     injected.execOps.exec {
                         commandLine(
                             "adb",
@@ -221,7 +246,6 @@ afterEvaluate {
                             project.properties["debug_package_name"]?.toString()
                         )
                     }
-                    delay(500)
                     injected.execOps.exec {
                         commandLine(
                             "adb",

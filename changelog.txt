@@ -1,8 +1,2 @@
 [ADDED]
-* Added support for placing text on the clock in any position using [TIME] (WAE -> General -> General -> Text next to Timestamp)
-Ex: 🕧 [TIME]
-
-[FIXED]
-* Fixed compatibility with WA 2.26.21.75
-
-NOTE: Now let's wait for WAEX to copy the commits 😆
+* Adicionado suporte para o WA/WB 2.26.25.xx

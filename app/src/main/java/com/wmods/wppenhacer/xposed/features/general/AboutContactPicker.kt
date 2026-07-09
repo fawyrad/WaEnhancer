@@ -41,13 +41,13 @@ import com.wmods.wppenhacer.xposed.core.components.WaContactWpp
 import com.wmods.wppenhacer.xposed.utils.DesignUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XSharedPreferences
+import android.content.SharedPreferences 
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import java.util.Collections
 import java.util.Locale
 
-class AboutContactPicker(loader: ClassLoader, preferences: XSharedPreferences) :
+class AboutContactPicker(loader: ClassLoader, preferences:SharedPreferences) :
     Feature(loader, preferences) {
 
     override fun doHook() {
@@ -597,7 +597,7 @@ class AboutContactPicker(loader: ClassLoader, preferences: XSharedPreferences) :
             swipeRefreshLayout?.isRefreshing = true
 
             val preservedSelection = LinkedHashSet(selectedJids)
-            Utils.getExecutor().execute {
+            Utils.executor.execute {
                 try {
                     val loadedItems = ContactPickerDataProvider.loadPickerItems(
                         activity,
@@ -715,7 +715,7 @@ class AboutContactPicker(loader: ClassLoader, preferences: XSharedPreferences) :
 
             val placeholder = createAvatarPlaceholder(item)
             if (avatarLoading.add(item.jid)) {
-                Utils.getExecutor().execute {
+                Utils.executor.execute {
                     val drawable = loadAvatarDrawable(item)
                     if (drawable != null) {
                         avatarCache[item.jid] = drawable

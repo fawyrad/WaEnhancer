@@ -16,13 +16,13 @@ import com.wmods.wppenhacer.xposed.features.general.Others
 import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
 import de.robv.android.xposed.XC_MethodHook
 import de.robv.android.xposed.XC_MethodReplacement
-import de.robv.android.xposed.XSharedPreferences
+import android.content.SharedPreferences 
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import org.json.JSONObject
 import java.lang.reflect.Field
 
-class MediaQuality(loader: ClassLoader, preferences: XSharedPreferences) :
+class MediaQuality(loader: ClassLoader, preferences:SharedPreferences) :
     Feature(loader, preferences) {
 
     companion object {
@@ -92,7 +92,7 @@ class MediaQuality(loader: ClassLoader, preferences: XSharedPreferences) :
                         mediaDataVideoConfiguration
                     )
                     val mediaDataVideoConfigObj =
-                        fieldMediaDataVideoConfiguration.get(videoProcessor)
+                        fieldMediaDataVideoConfiguration!!.get(videoProcessor)
                     val fieldforceSingleTranscoding =
                         fieldsMediaDataVideoConfiguration["forceSingleTranscoding"]
                     fieldforceSingleTranscoding?.setBoolean(mediaDataVideoConfigObj, true)
@@ -207,6 +207,18 @@ class MediaQuality(loader: ClassLoader, preferences: XSharedPreferences) :
                     fieldimageMaxEdge?.setInt(processImageQuality, 6000)
                 }
             })
+
+            val maxKb = 50 * 1024
+            listOf(1577, 6030, 2656, 15752, 15746).forEach { Others.propsInteger[it] = maxKb }
+            listOf(1581, 1575, 1578, 6029, 2655, 15749, 2655).forEach {
+                Others.propsInteger[it] = 100
+            }
+            Others.propsBoolean[6033] = true
+            Others.propsBoolean[9569] = false
+            Others.propsBoolean[26289] = true
+            Others.propsBoolean[26291] = true
+            Others.propsBoolean[22375] = true
+            listOf(1576, 2654, 6032, 15748, 3068).forEach { Others.propsInteger[it] = 3840 }
 
             // Prevent crashes in Media preview
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

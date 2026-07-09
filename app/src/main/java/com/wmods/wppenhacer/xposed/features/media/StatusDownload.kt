@@ -15,11 +15,10 @@ import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
 import com.wmods.wppenhacer.xposed.features.listeners.MenuStatusListener
 import com.wmods.wppenhacer.xposed.utils.MimeTypeUtils
 import com.wmods.wppenhacer.xposed.utils.Utils
-import de.robv.android.xposed.XSharedPreferences
 import org.luckypray.dexkit.query.enums.StringMatchType
 import java.io.File
 
-class StatusDownload(loader: ClassLoader, preferences: XSharedPreferences) : Feature(loader, preferences) {
+class StatusDownload(loader: ClassLoader, preferences:SharedPreferences) : Feature(loader, preferences) {
 
     override fun doHook() {
         if (!prefs.getBoolean("downloadstatus", false)) return
@@ -70,7 +69,7 @@ class StatusDownload(loader: ClassLoader, preferences: XSharedPreferences) : Fea
                     clazz = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "ConsolidatedStatusComposerActivity")
                     intent.putExtra("status_composer_mode", 2)
                 }
-                intent.setClassName(Utils.getApplication().packageName, clazz.name)
+                intent.setClassName(Utils.application.packageName, clazz.name)
                 intent.putExtra("android.intent.extra.TEXT", fMessage?.messageStr)
                 WppCore.getCurrentActivity()?.startActivity(intent)
                 return
@@ -84,7 +83,7 @@ class StatusDownload(loader: ClassLoader, preferences: XSharedPreferences) : Fea
 
             val intent = Intent()
             val clazz = Unobfuscator.findFirstClassUsingName(classLoader, StringMatchType.EndsWith, "MediaComposerActivity")
-            intent.setClassName(Utils.getApplication().packageName, clazz.name)
+            intent.setClassName(Utils.application.packageName, clazz.name)
             intent.putExtra("jids", arrayListOf("status@broadcast"))
             intent.putExtra("android.intent.extra.STREAM", arrayListOf(Uri.fromFile(file)))
             intent.putExtra("android.intent.extra.TEXT", fMessage?.messageStr)
